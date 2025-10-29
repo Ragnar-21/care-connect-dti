@@ -1,0 +1,39 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=Roboto:wght@400;700&display=swap');
+
+:root {
+  --primary-gradient: linear-gradient(90deg, #0f2027 0%, #2c5364 100%);
+  --accent-gradient: linear-gradient(90deg, #43cea2 0%, #185a9d 100%);
+  --faq-bg: #f4f8fb;
+  --section-bg: #f9fbfd;
+  --footer-bg: #0f2027;
+  --footer-text: #e0e0e0;
+}
+
+body {
+  font-family: 'Montserrat', 'Roboto', Arial, sans-serif;
+  background: var(--section-bg);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Montserrat', Arial, sans-serif;
+  font-weight: 700;
+}
+
+.section-gradient {
+  background: var(--primary-gradient);
+  color: #fff;
+}
+
+.faq-gradient {
+  background: var(--faq-bg);
+}
+
+.footer-gradient {
+  background: var(--footer-bg);
+  color: var(--footer-text);
+}
