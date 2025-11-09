@@ -16,16 +16,8 @@ const queryNLPService = async (query) => {
 Please provide your response in the following EXACT JSON format (make sure it's valid JSON):
 
 {
-  "severity_score": [number from 1-10, where 1=very mild, 10=life-threatening emergency],
-  "severity_level": "[Low/Moderate/High/Critical]",
-  "primary_assessment": "[Brief possible condition/assessment in 1-2 sentences]",
-  "possible_conditions": ["condition1", "condition2", "condition3"],
-  "immediate_actions": [
-    "action1",
-    "action2",
-    "action3"
-  ],
-  "self_care_tips": [
+  "primary_assessment": "[Brief description of symptom severity and general impact on well-being. DO NOT mention specific diseases or diagnoses. Focus on describing the symptoms objectively.]",
+  "first_aid_tips": [
     "tip1",
     "tip2",
     "tip3"
@@ -35,12 +27,14 @@ Please provide your response in the following EXACT JSON format (make sure it's 
     "sign2",
     "sign3"
   ],
+  "severity_score": [number from 1-10, where 1=very mild, 10=life-threatening emergency],
   "when_to_seek_help": "[Specific guidance on when to see a doctor]",
   "urgency": "[Routine/Same Day/Urgent/Emergency]",
+  "recommended_action": "[Based on severity_score: 1-3=Schedule a routine check-up, 4-6=Book an appointment soon, 7-8=Book urgent care appointment, 9-10=Seek immediate emergency care]",
   "disclaimer": "This is AI-generated health information for educational purposes only. Always consult healthcare professionals for medical advice, diagnosis, or treatment."
 }
 
-Ensure the JSON is properly formatted and valid. Base severity score on symptom combination and potential seriousness.`
+Ensure the JSON is properly formatted and valid. Base severity score on symptom intensity and potential impact on daily activities.`
 
     const result = await model.generateContent(prompt)
     const response = await result.response
@@ -53,14 +47,34 @@ Ensure the JSON is properly formatted and valid. Base severity score on symptom 
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const jsonData = JSON.parse(jsonMatch[0]);
-        return formatSymptomAnalysis(jsonData);
+        console.log('Parsed JSON from Gemini:', jsonData);
+        
+        const structuredResult = {
+          formattedMessage: formatSymptomAnalysis(jsonData),
+          severityScore: jsonData.severity_score || 0,
+          urgency: jsonData.urgency || 'Routine',
+          recommendedAction: jsonData.recommended_action || ''
+        };
+        
+        console.log('Returning structured result:', structuredResult);
+        return structuredResult;
       } else {
         // Fallback if JSON parsing fails
-        return formatFallbackResponse(query, text);
+        return {
+          formattedMessage: formatFallbackResponse(query, text),
+          severityScore: 5,
+          urgency: 'Same Day',
+          recommendedAction: 'Book an appointment soon'
+        };
       }
     } catch (parseError) {
       console.log('JSON parsing failed, using fallback formatting');
-      return formatFallbackResponse(query, text);
+      return {
+        formattedMessage: formatFallbackResponse(query, text),
+        severityScore: 5,
+        urgency: 'Same Day',
+        recommendedAction: 'Book an appointment soon'
+      };
     }
     
   } catch (error) {
@@ -81,7 +95,12 @@ Ensure the JSON is properly formatted and valid. Base severity score on symptom 
     }
     
     // Provide a fallback response if Gemini fails
-    return formatErrorResponse(query, errorMessage)
+    return {
+      formattedMessage: formatErrorResponse(query, errorMessage),
+      severityScore: 5,
+      urgency: 'Same Day',
+      recommendedAction: 'Book an appointment soon to discuss your symptoms'
+    }
   }
 }
 
@@ -95,20 +114,14 @@ const formatSymptomAnalysis = (data) => {
     "═══════════════════════════════════════",
     "",
     "📊 SEVERITY ASSESSMENT",
-    `   ${severityEmoji} Score: ${data.severity_score}/10 | Level: ${data.severity_level}`,
+    `   ${severityEmoji} Score: ${data.severity_score}/10`,
     `   ${urgencyColor} Urgency: ${data.urgency}`,
     "",
     "🔍 PRIMARY ASSESSMENT",
     `   ${data.primary_assessment}`,
     "",
-    "🎯 POSSIBLE CONDITIONS",
-    ...data.possible_conditions.map(condition => `   • ${condition}`),
-    "",
-    "⚡ IMMEDIATE ACTIONS",
-    ...data.immediate_actions.map(action => `   ✓ ${action}`),
-    "",
-    "🏠 SELF-CARE RECOMMENDATIONS",
-    ...data.self_care_tips.map(tip => `   • ${tip}`),
+    "🚑 FIRST AID TIPS",
+    ...data.first_aid_tips.map(tip => `   ✓ ${tip}`),
     "",
     "⚠️ WARNING SIGNS TO WATCH",
     ...data.warning_signs.map(sign => `   🚨 ${sign}`),
@@ -116,11 +129,22 @@ const formatSymptomAnalysis = (data) => {
     "👨‍⚕️ WHEN TO SEEK MEDICAL HELP",
     `   ${data.when_to_seek_help}`,
     "",
+    "🏥 RECOMMENDED ACTION",
+    `   ${data.recommended_action}`,
+    "",
+    data.severity_score > 1 ? [
+      "═══════════════════════════════════════",
+      "🔵 NEXT STEPS",
+      "   Book an appointment with a healthcare provider based on the urgency level.",
+      "   Click the 'Book Appointment' button below to proceed.",
+      "═══════════════════════════════════════"
+    ].join('\n') : "",
+    "",
     "═══════════════════════════════════════",
     "⚖️ MEDICAL DISCLAIMER",
     `   ${data.disclaimer}`,
     "═══════════════════════════════════════"
-  ];
+  ].filter(Boolean);
   
   return report.join('\n');
 };

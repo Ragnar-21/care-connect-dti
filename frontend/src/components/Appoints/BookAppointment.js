@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLocation } from 'react-router-dom'
 import {
   createAppointmentRequest,
   getAllDoctors,
@@ -19,23 +20,42 @@ import {
   CircularProgress,
   Switch,
   FormControlLabel,
+  Alert,
+  Snackbar,
 } from '@mui/material'
 
 const BookAppointment = () => {
+  const location = useLocation()
   const { userData, isLoading: authLoading } = useAuth()
+  
+  // Debug log for incoming data
+  console.log('BookAppointment - Location State:', location.state);
+  
+  // Log the incoming state
+  console.log('BookAppointment - Incoming state:', location.state);
+  console.log('BookAppointment - severityScore from state:', location.state?.severityScore);
+  console.log('BookAppointment - urgencyLevel from state:', location.state?.urgencyLevel);
+  
   const [formData, setFormData] = useState({
     doctorMedicalId: '',
     patientMedicalId: userData?.medicalId || '',
     preferredDate: '',
     preferredTime: '',
-    symptoms: '',
+    symptoms: location.state?.symptoms || '',
     contactInfo: '',
     notificationType: 'email',
-    meetingType: 'offline', // Default to offline meeting
+    meetingType: 'offline',
+    urgencyLevel: location.state?.urgencyLevel || 'Routine',
+    urgencyScore: location.state?.severityScore === undefined ? 0 : location.state.severityScore
   })
   const [doctors, setDoctors] = useState([])
   const [loading, setLoading] = useState(true)
   const [userProfileLoading, setUserProfileLoading] = useState(false)
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
+  })
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -54,41 +74,43 @@ const BookAppointment = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!userData?.medicalId) {
-      alert(
-        'Please update your profile with a medical ID before booking an appointment.'
-      )
-      return
-    }
-
-    const data = {
-      ...formData,
-      patientMedicalId: userData.medicalId,
-    }
+    setLoading(true)
 
     try {
-      setUserProfileLoading(true)
-      await createAppointmentRequest(data)
-      setUserProfileLoading(false)
-      alert(
-        'Appointment request submitted successfully! Please check your pending requests for updates.'
-      )
-
-      // Reset form
-      setFormData({
-        doctorMedicalId: '',
+      const appointmentData = {
+        ...formData,
         patientMedicalId: userData.medicalId,
+        urgencyScore: formData.urgencyScore,
+        urgencyLevel: formData.urgencyLevel
+      }
+
+      const response = await createAppointmentRequest(appointmentData)
+      
+      setSnackbar({
+        open: true,
+        message: 'Appointment request sent successfully!',
+        severity: 'success'
+      })
+      
+      // Reset form or redirect
+      setFormData({
+        ...formData,
+        doctorMedicalId: '',
         preferredDate: '',
         preferredTime: '',
         symptoms: '',
-        contactInfo: '',
-        notificationType: 'email',
+        contactInfo: ''
       })
+      
     } catch (error) {
-      setUserProfileLoading(false)
-      alert(
-        'Failed to submit appointment request: ${error.response?.data?.message || error.message}'
-      )
+      console.error('Error booking appointment:', error)
+      setSnackbar({
+        open: true,
+        message: 'Failed to book appointment. Please try again.',
+        severity: 'error'
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -98,6 +120,14 @@ const BookAppointment = () => {
       ...prev,
       [name]: value,
     }))
+  }
+
+  const handleSnackbarClose = (event, reason) => {
+    if (reason === 'clickaway') {
+      return
+    }
+
+    setSnackbar({ ...snackbar, open: false })
   }
 
   if (loading || authLoading) {
@@ -117,23 +147,40 @@ const BookAppointment = () => {
 
   return (
     <Container maxWidth="md">
-      <Paper elevation={3} sx={{ p: 4, mt: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Book Appointment
+      <Paper elevation={3} sx={{ p: 4, mt: 4, borderRadius: 2 }}>
+        <Typography variant="h4" component="h1" gutterBottom align="center" 
+          sx={{ 
+            color: '#185a9d',
+            fontWeight: 700,
+            mb: 4
+          }}>
+          Book an Appointment
         </Typography>
-        <form onSubmit={handleSubmit}>
-          <FormControl fullWidth sx={{ mb: 2 }}>
+
+        {location.state?.fromSymptomChecker && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            Based on your symptom analysis:
+            <Typography component="div" sx={{ mt: 1 }}>
+              • Urgency Level: <strong>{formData.urgencyLevel || 'Not specified'}</strong>
+              <br/>
+              • Severity Score: <strong>{formData.urgencyScore !== undefined ? `${formData.urgencyScore}/10` : 'Not specified'}</strong>
+            </Typography>
+          </Alert>
+        )}
+
+        <Box component="form" noValidate sx={{ mt: 3 }} onSubmit={handleSubmit}>
+          <FormControl fullWidth sx={{ mb: 3 }}>
             <InputLabel>Select Doctor</InputLabel>
             <Select
-              name="doctorMedicalId"
               value={formData.doctorMedicalId}
-              onChange={handleChange}
-              required
+              onChange={(e) =>
+                setFormData({ ...formData, doctorMedicalId: e.target.value })
+              }
+              label="Select Doctor"
             >
               {doctors.map((doctor) => (
                 <MenuItem key={doctor.medicalId} value={doctor.medicalId}>
-                  Dr. {doctor.username} -{' '}
-                  {doctor.specialty || 'General Practitioner'}
+                  {doctor.username} - {doctor.specialization}
                 </MenuItem>
               ))}
             </Select>
@@ -141,38 +188,75 @@ const BookAppointment = () => {
 
           <TextField
             fullWidth
+            multiline
+            rows={4}
+            label="Symptoms & Concerns"
+            value={formData.symptoms}
+            onChange={(e) =>
+              setFormData({ ...formData, symptoms: e.target.value })
+            }
+            sx={{ mb: 3 }}
+          />
+
+          {!location.state?.fromSymptomChecker && (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                To set urgency level other than routine, please use the Symptom Checker first to assess your condition.
+              </Alert>
+              <FormControl fullWidth sx={{ mb: 3 }}>
+                <InputLabel>Urgency Level</InputLabel>
+                <Select
+                  value="Routine"
+                  disabled
+                  label="Urgency Level"
+                >
+                  <MenuItem value="Routine">Routine</MenuItem>
+                </Select>
+                <FormHelperText>
+                  Use Symptom Checker to determine appointment urgency
+                </FormHelperText>
+              </FormControl>
+            </>
+          )}
+
+          {location.state?.fromSymptomChecker && (
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Urgency Level</InputLabel>
+              <Select
+                value={formData.urgencyLevel}
+                disabled
+                label="Urgency Level"
+              >
+                <MenuItem value={formData.urgencyLevel}>{formData.urgencyLevel}</MenuItem>
+              </Select>
+              <FormHelperText>
+                Urgency level determined by Symptom Checker
+              </FormHelperText>
+            </FormControl>
+          )}
+
+          <TextField
+            fullWidth
             type="date"
-            name="preferredDate"
             label="Preferred Date"
             value={formData.preferredDate}
-            onChange={handleChange}
-            required
+            onChange={(e) =>
+              setFormData({ ...formData, preferredDate: e.target.value })
+            }
             InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2 }}
+            sx={{ mb: 3 }}
           />
 
           <TextField
             fullWidth
             type="time"
-            name="preferredTime"
             label="Preferred Time"
             value={formData.preferredTime}
-            onChange={handleChange}
-            required
+            onChange={(e) =>
+              setFormData({ ...formData, preferredTime: e.target.value })
+            }
             InputLabelProps={{ shrink: true }}
-            sx={{ mb: 2 }}
-          />
-
-          <TextField
-            fullWidth
-            multiline
-            rows={4}
-            name="symptoms"
-            label="Symptoms/Reason for Visit"
-            value={formData.symptoms}
-            onChange={handleChange}
-            required
-            sx={{ mb: 2 }}
+            sx={{ mb: 3 }}
           />
 
           <TextField
@@ -240,8 +324,24 @@ const BookAppointment = () => {
           >
             {userProfileLoading ? 'Loading...' : 'Book Appointment'}
           </Button>
-        </form>
+        </Box>
       </Paper>
+      
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   )
 }

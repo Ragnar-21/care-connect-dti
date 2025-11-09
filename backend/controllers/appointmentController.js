@@ -2,8 +2,8 @@ const mongoose = require('mongoose')
 const { broadcastAvailabilityUpdate } = require('../websocket')
 const Doctor = require('../models/doctorModel')
 const Appointment = require('../models/appointmentModel')
-const AppointmentRequest = require('../models/appointmentRequestModel') // For appointment requests
-const User = require('../models/userModel') // Add this line
+const AppointmentRequest = require('../models/appointmentRequestModel')
+const User = require('../models/userModel')
 const { sendNotification } = require('../services/notificationService')
 
 exports.bookAppointment = async (req, res) => {
@@ -15,6 +15,7 @@ exports.bookAppointment = async (req, res) => {
     symptoms,
     contactInfo,
     notificationType,
+    urgencyScore = 3, // Default urgency score if not provided
   } = req.body
 
   try {
@@ -38,9 +39,6 @@ exports.bookAppointment = async (req, res) => {
       return res.status(404).json({ message: 'Patient not found with this medical ID' })
     }
 
-    // Check if doctor has availability (optional - can be enhanced later)
-    // For now, we'll allow direct booking
-
     const appointment = new Appointment({
       doctorMedicalId,
       patientMedicalId,
@@ -49,27 +47,43 @@ exports.bookAppointment = async (req, res) => {
       date,
       time,
       symptoms,
-      status: 'confirmed'
+      urgencyScore,
+      status: 'pending'
     })
 
     await appointment.save()
 
-    // Send confirmation notification to patient
-    if (contactInfo && notificationType) {
-      sendNotification(
-        notificationType,
-        contactInfo,
-        'Appointment Confirmation',
-        `Your appointment with Dr. ${doctor.username} on ${date} at ${time} has been confirmed.`,
-      )
-    }
+    // Send notification
+    const notificationText = `New appointment request from ${patient.username} for ${date} at ${time}`
+    await sendNotification(doctor.medicalId, notificationText, 'appointment', {
+      appointmentId: appointment._id,
+      urgencyScore
+    })
 
-    res
-      .status(201)
-      .json({ message: 'Appointment booked successfully', appointment })
+    res.status(201).json({
+      message: 'Appointment request sent successfully',
+      appointment
+    })
+
   } catch (error) {
     console.error('Error booking appointment:', error)
-    res.status(500).json({ message: 'Internal server error', error: error.message })
+    res.status(500).json({ message: 'Error booking appointment' })
+  }
+}
+
+// Get doctor's appointments sorted by urgency
+exports.getDoctorAppointments = async (req, res) => {
+  try {
+    const { medicalId } = req.params
+    const appointments = await Appointment.find({
+      doctorMedicalId: medicalId,
+      status: { $in: ['pending', 'confirmed'] }
+    }).sort({ urgencyScore: -1, date: 1, time: 1 }) // Sort by urgency (high to low), then date and time
+
+    res.json(appointments)
+  } catch (error) {
+    console.error('Error fetching appointments:', error)
+    res.status(500).json({ message: 'Error fetching appointments' })
   }
 }
 

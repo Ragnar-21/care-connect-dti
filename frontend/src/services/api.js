@@ -171,3 +171,16 @@ export const rejectAppointment = (requestId) =>
   api.put(`/appointment-requests/${requestId}/status`, { status: 'rejected' })
 export const cancelAppointment = (requestId) =>
   api.put(`/appointment-requests/${requestId}/status`, { status: 'cancelled' })
+
+// Appointment endpoints with urgency score
+export const bookAppointmentWithUrgency = (data) =>
+  api.post('/appointments/book', data)
+export const getDoctorsAvailable = () => api.get('/doctors/available')
+
+// Function to convert severity score to urgency level
+export const getUrgencyFromSeverity = (severityScore) => {
+  if (severityScore >= 9) return 'Emergency'
+  if (severityScore >= 7) return 'Urgent'
+  if (severityScore >= 4) return 'Same Day'
+  return 'Routine'
+}
