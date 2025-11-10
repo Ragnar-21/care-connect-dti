@@ -13,7 +13,7 @@ CareConnect is a full-stack web application designed for college health centers,
 - **Doctor & Patient Profiles**: View and edit personal and professional information
 - **Chat & Notifications**: Real-time chat and notification system
 - **Activity Logs & Analytics**: Admin tools for monitoring and reporting
-- **Responsive UI**: Modern, accessible design using Material-UI with dark/light mode
+- **Responsive UI**: Modern, accessible design using Material-UI with dark and light mode
 
 ---
 
