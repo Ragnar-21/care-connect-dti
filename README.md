@@ -23,6 +23,7 @@ CareConnect is a full-stack web application designed for college health centers,
 - **Backend**: Node.js, Express, JWT, Mongoose
 - **Database**: MongoDB Atlas
 - **Deployment**: Netlify (frontend), Render (backend)
+  
 
 ---
 
